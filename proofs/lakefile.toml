@@ -1,0 +1,10 @@
+name = "cnf"
+version = "0.1.0"
+defaultTargets = ["cnf"]
+
+[[lean_lib]]
+name = "Cnf"
+
+[[lean_exe]]
+name = "cnf"
+root = "Main"
