@@ -23,37 +23,71 @@ inductive isNormalForm : SKIExpr → Prop
 | S2 : ∀ e₁ e₂, isNormalForm e₁ → isNormalForm e₂ → isNormalForm (SKIExpr.app (SKIExpr.app SKIExpr.S e₁) e₂)
 | var : ∀ n, isNormalForm (SKIExpr.var n)
 
-inductive reduceSKI : SKIExpr → SKIExpr → Prop
-| S : ∀ e₁ e₂ e₃, reduceSKI (SKIExpr.app (SKIExpr.app (SKIExpr.app SKIExpr.S e₁) e₂) e₃)
+inductive closedSKI : SKIExpr → Prop
+| S : closedSKI SKIExpr.S
+| K : closedSKI SKIExpr.K
+| I : closedSKI SKIExpr.I
+| app : ∀ e₁ e₂, closedSKI e₁ → closedSKI e₂ → closedSKI (SKIExpr.app e₁ e₂)
+
+inductive reduceSKIHelper : SKIExpr → SKIExpr → Prop
+| S : ∀ e₁ e₂ e₃,
+   reduceSKIHelper (SKIExpr.app (SKIExpr.app (SKIExpr.app SKIExpr.S e₁) e₂) e₃)
                       (SKIExpr.app (SKIExpr.app e₁ e₃) (SKIExpr.app e₂ e₃))
-| K : ∀ e₁ e₂, reduceSKI (SKIExpr.app (SKIExpr.app SKIExpr.K e₁) e₂) e₁
-| I : ∀ e, reduceSKI (SKIExpr.app SKIExpr.I e) e
-| app1 : ∀ e₁ e₁' e₂, reduceSKI e₁ e₁' → reduceSKI (SKIExpr.app e₁ e₂) (SKIExpr.app e₁' e₂)
-| app2 : ∀ e₁ e₂ e₂', reduceSKI e₂ e₂' → reduceSKI (SKIExpr.app e₁ e₂) (SKIExpr.app e₁ e₂')
+| K : ∀ e₁ e₂, reduceSKIHelper (SKIExpr.app (SKIExpr.app SKIExpr.K e₁) e₂) e₁
+| I : ∀ e, reduceSKIHelper (SKIExpr.app SKIExpr.I e) e
+| app1 : ∀ e₁ e₁' e₂, reduceSKIHelper e₁ e₁' → reduceSKIHelper (SKIExpr.app e₁ e₂) (SKIExpr.app e₁' e₂)
+| app2 : ∀ e₁ e₂ e₂', reduceSKIHelper e₂ e₂' → reduceSKIHelper (SKIExpr.app e₁ e₂) (SKIExpr.app e₁ e₂')
+
+inductive reduceSKI : SKIExpr → SKIExpr → Prop
+| closed : closedSKI e₁ → reduceSKIHelper e₁ e₂ → reduceSKI e₁ e₂
 
 inductive reduceSKIMulti : SKIExpr → SKIExpr → Prop
 | refl : ∀ e, reduceSKIMulti e e
 | step : ∀ e₁ e₂ e₃, reduceSKI e₁ e₂ → reduceSKIMulti e₂ e₃ → reduceSKIMulti e₁ e₃
 
-theorem reduceSKIMultiApp1 : ∀ e₁ e₁' e₂, reduceSKIMulti e₁ e₁' → reduceSKIMulti (SKIExpr.app e₁ e₂) (SKIExpr.app e₁' e₂) := by
-  intros e₁ e₁' e₂ h
+theorem reduceSKIApp1 : ∀ e₁ e₁' e₂, closedSKI e₂ → reduceSKI e₁ e₁' → reduceSKI (SKIExpr.app e₁ e₂) (SKIExpr.app e₁' e₂) := by
+  intros e₁ e₁' e₂ cl h
+  cases h
+  case closed cl' hlp =>
+    apply reduceSKI.closed
+    apply closedSKI.app
+    exact cl'
+    exact cl
+    apply reduceSKIHelper.app1
+    exact hlp
+
+theorem reduceSKIApp2 : ∀ e₁ e₂ e₂', closedSKI e₁ → reduceSKI e₂ e₂' → reduceSKI (SKIExpr.app e₁ e₂) (SKIExpr.app e₁ e₂') := by
+  intros e₁ e₂ e₂' cl h
+  cases h
+  case closed cl' hlp =>
+    apply reduceSKI.closed
+    apply closedSKI.app
+    exact cl
+    exact cl'
+    apply reduceSKIHelper.app2
+    exact hlp
+
+theorem reduceSKIMultiApp1 : ∀ e₁ e₁' e₂, closedSKI e₂ → reduceSKIMulti e₁ e₁' → reduceSKIMulti (SKIExpr.app e₁ e₂) (SKIExpr.app e₁' e₂) := by
+  intros e₁ e₁' e₂ cl h
   induction h
   case refl =>
     apply reduceSKIMulti.refl
-  case step e₁ e₂ e₃ h1 h2 ih =>
+  case step e1 e2 e3 h1 h2 ih =>
     apply reduceSKIMulti.step
-    apply reduceSKI.app1
+    apply reduceSKIApp1
+    exact cl
     exact h1
     exact ih
 
-theorem reduceSKIMultiApp2 : ∀ e₁ e₂ e₂', reduceSKIMulti e₂ e₂' → reduceSKIMulti (SKIExpr.app e₁ e₂) (SKIExpr.app e₁ e₂') := by
-  intros e₁ e₂ e₂' h
+theorem reduceSKIMultiApp2 : ∀ e₁ e₂ e₂', closedSKI e₁ → reduceSKIMulti e₂ e₂' → reduceSKIMulti (SKIExpr.app e₁ e₂) (SKIExpr.app e₁ e₂') := by
+  intros e₁ e₂ e₂' cl h
   induction h
   case refl =>
     apply reduceSKIMulti.refl
-  case step e₁ e₂ e₃ h1 h2 ih =>
+  case step e1 e2 e3 h1 h2 ih =>
     apply reduceSKIMulti.step
-    apply reduceSKI.app2
+    apply reduceSKIApp2
+    exact cl
     exact h1
     exact ih
 
@@ -208,15 +242,49 @@ def skiContainsVar : SKIExpr → Bool
 | SKIExpr.app e₁ e₂ => skiContainsVar e₁ || skiContainsVar e₂
 | _ => false
 
+theorem closedSkiNoVar : ∀ e, closedSKI e → skiContainsVar e = false := by
+  intros e h
+  induction h
+  case S => simp [skiContainsVar]
+  case K => simp [skiContainsVar]
+  case I => simp [skiContainsVar]
+  case app e₁ e₂ h1 h2 ih1 ih2 =>
+    simp [skiContainsVar]
+    constructor
+    case left =>
+      exact ih1
+    case right =>
+      exact ih2
+
 def abstract : SKIExpr -> SKIExpr
 | SKIExpr.var 0 => SKIExpr.I
 | SKIExpr.var (n+1) => SKIExpr.app SKIExpr.K (SKIExpr.var n)
 | SKIExpr.app e₁ e₂ => if skiContainsVar e₁ || skiContainsVar e₂ then
   SKIExpr.app (SKIExpr.app SKIExpr.S (abstract e₁)) (abstract e₂) else
-  SKIExpr.app SKIExpr.K (SKIExpr.app (abstract e₁) (abstract e₂))
+  SKIExpr.app SKIExpr.K (SKIExpr.app e₁ e₂)
 | SKIExpr.S => SKIExpr.app SKIExpr.K SKIExpr.S
 | SKIExpr.K => SKIExpr.app SKIExpr.K SKIExpr.K
 | SKIExpr.I => SKIExpr.app SKIExpr.K SKIExpr.I
+
+theorem closedSkiAbstract : ∀ e, closedSKI e → abstract e = SKIExpr.app SKIExpr.K e := by
+  intros e h
+  induction e
+  case S => simp [abstract]
+  case K => simp [abstract]
+  case I => simp [abstract]
+  case app e₁ e₂ ih1 ih2 =>
+    simp [abstract]
+    cases h
+    case app h1 h2 =>
+      constructor
+      case left =>
+        apply closedSkiNoVar
+        exact h1
+      case right =>
+        apply closedSkiNoVar
+        exact h2
+  case var n =>
+    cases h
 
 -- theorem reduceSKIMultiAbstract : ∀ e₁ e₂, reduceSKIMulti e₁ e₂ → reduceSKIMulti (abstract e₁) (abstract e₂) := by
 --   intros e₁ e₂ h
@@ -377,56 +445,128 @@ theorem subst_lift20 : subst (n+1) (lift 0 e) (lift 0 f) = lift 0 (subst n e f) 
 theorem ifSkiReducesThenLambdaReduces :
   ∀ e₁ e₂, reduceSKI e₁ e₂ → reduceLambdaMulti (skiToLambda2 e₁) (skiToLambda2 e₂) := by
   intro e₁ e₂ h
-  induction h
-  case S =>
-    simp [skiToLambda2]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.app1
-    apply reduceLambda.app1
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.app1
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    rw [subst_lift]
-    rw [subst_lift20]
-    rw [subst_lift]
-    rw [subst_lift]
-    apply reduceLambdaMulti.refl
-  case K =>
-    simp [skiToLambda2]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.app1
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    rw [subst_lift]
-    apply reduceLambdaMulti.refl
-  case I =>
-    simp [skiToLambda2]
-    apply reduceLambdaMulti.step
-    apply reduceLambda.beta
-    simp [subst0, subst, lift0]
-    apply reduceLambdaMulti.refl
-  case app1 e₁ e₁' e₂ h ih =>
-    simp [skiToLambda2]
-    apply reduceLambdaMultiApp1
-    exact ih
-  case app2 e₁ e₂ e₂' h ih =>
-    simp [skiToLambda2]
-    apply reduceLambdaMultiApp2
-    exact ih
+  cases h
+  case closed cl h =>
+    induction h
+    case S =>
+      simp [skiToLambda2]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.app1
+      apply reduceLambda.app1
+      apply reduceLambda.beta
+      simp [subst0, subst, lift0]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.app1
+      apply reduceLambda.beta
+      simp [subst0, subst, lift0]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.beta
+      simp [subst0, subst]
+      rw [subst_lift]
+      rw [subst_lift20]
+      rw [subst_lift]
+      rw [subst_lift]
+      apply reduceLambdaMulti.refl
+    case K =>
+      simp [skiToLambda2]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.app1
+      apply reduceLambda.beta
+      simp [subst0, subst, lift0]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.beta
+      simp [subst0]
+      rw [subst_lift]
+      apply reduceLambdaMulti.refl
+    case I =>
+      simp [skiToLambda2]
+      apply reduceLambdaMulti.step
+      apply reduceLambda.beta
+      simp [subst0, subst]
+      apply reduceLambdaMulti.refl
+    case app1 e₁ e₁' e₂ h ih =>
+      simp [skiToLambda2]
+      cases cl
+      case app cl1 cl2 =>
+        apply reduceLambdaMultiApp1
+        exact ih cl1
+    case app2 e₁ e₂ e₂' h ih =>
+      simp [skiToLambda2]
+      cases cl
+      case app cl1 cl2 =>
+        apply reduceLambdaMultiApp2
+        exact ih cl2
 
 theorem helper :
   reduceSKIMulti (starAbstraction (Lambda.app (Lambda.abs e₁) e₂)) (starAbstraction (subst0 e₁ e₂)) := by
   simp [starAbstraction]
   sorry
+
+theorem reducedSkiIsClosed : ∀ e₁ e₂, reduceSKI e₁ e₂ → closedSKI e₂ := by
+  intros e₁ e₂ h
+  cases h
+  case closed cl hlp =>
+    induction hlp
+    case S e1 e2 e3 =>
+      cases cl
+      case app cl1 cl2 =>
+        cases cl1
+        case app cl11 cl12 =>
+          cases cl11
+          case app cl111 cl112 =>
+            apply closedSKI.app
+            apply closedSKI.app
+            exact cl112
+            exact cl2
+            apply closedSKI.app
+            exact cl12
+            exact cl2
+    case K e1 e2 =>
+      cases cl
+      case app cl1 cl2 =>
+        cases cl1
+        case app cl11 cl12 =>
+          exact cl12
+    case I e =>
+      cases cl
+      case app cl1 cl2 =>
+        exact cl2
+    case app1 e1 e1' e2 h ih =>
+      cases cl
+      case app cl1 cl2 =>
+        apply closedSKI.app
+        exact ih cl1
+        exact cl2
+    case app2 e1 e2 e2' h ih =>
+      cases cl
+      case app cl1 cl2 =>
+        apply closedSKI.app
+        exact cl1
+        exact ih cl2
+
+theorem reduceSKIAbstract : ∀ e₁ e₂, reduceSKI e₁ e₂ → reduceSKI (abstract e₁) (abstract e₂) := by
+  intros e₁ e₂ h
+  cases h
+  case closed cl h =>
+    have cl' := closedSkiAbstract e₁ cl
+    have cl'' := closedSkiAbstract e₂ (reducedSkiIsClosed e₁ e₂ (reduceSKI.closed cl h))
+    rw [cl', cl'']
+    apply reduceSKIApp2
+    constructor
+    constructor
+    exact cl
+    exact h
+
+theorem reduceSKIMultiAbstract : ∀ e₁ e₂, reduceSKIMulti e₁ e₂ → reduceSKIMulti (abstract e₁) (abstract e₂) := by
+  intros e₁ e₂ h
+  induction h
+  case refl =>
+    apply reduceSKIMulti.refl
+  case step e₁' e₂' e red h1 ih =>
+
+    -- apply reduceSKI.app1
+    -- apply reduceSKI.app1
+    sorry
 
 theorem ifLambdaReducesThenSkiReduces :
   ∀ e₁ e₂, reduceClosedLambda e₁ e₂ → reduceSKIMulti (starAbstraction e₁) (starAbstraction e₂) := by
@@ -454,4 +594,5 @@ theorem ifLambdaReducesThenSkiReduces :
     case abs e red =>
       have ih := h₁ e red
       simp [starAbstraction]
-      sorry
+      apply reduceSKIMultiAbstract
+      exact ih
